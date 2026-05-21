@@ -39,7 +39,7 @@ function NoiseMap() {
     });
 
     // Fetch noise data from backend and add marker
-    fetch('/api/noise')
+    fetch('https://ocean-viz.up.railway.app/api/noise')
       .then(res => res.json())
       .then(data => {
         const { lat, lon } = data.location;
