@@ -30,6 +30,6 @@ module.exports = {
   plugins: [new HtmlWebpackPlugin({ template: "./index.html" })],
   devServer: {
     port: 3000,
-    proxy: [{ context: ["/api"], target: "http://localhost:8000" }],
+    proxy: [{ context: ["/api"], target: "ocean-viz.up.railway.app" }],
   },
 };
