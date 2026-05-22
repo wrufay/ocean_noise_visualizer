@@ -1,6 +1,0 @@
-{
-    "presets": ["@babel/preset-env", "@babel/preset-react"]
-    // @babel/preset-env: Convert modern ES6+ JavaScript into older JS so all browsers can understand
-    // @babel/preset-react: Convert JSX into regular JavaScript that browsers can run
-  }
-  
