@@ -23,7 +23,7 @@ def get_noise():
     return {
         # Fake sample data
         "source": "wind_turbine_1",
-        "location": {"lat": 44.5, "lon": -63.5},
+        "location": {"lat": 45.361336, "lon": -75.722396},
         "decibels": 120
     }
 
