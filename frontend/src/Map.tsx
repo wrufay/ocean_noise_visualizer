@@ -31,6 +31,19 @@ interface RoutePoint {
   source: string;
 }
 
+function formatTime(t: number | string): string {
+  const s = String(t);
+  // unix epoch (CCG)
+  if (/^\d+$/.test(s)) {
+    const d = new Date(Number(s) * 1000);
+    return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  }
+  // compact ISO e.g. 20251201T035835Z
+  if (s.length >= 15)
+    return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)} ${s.slice(9,11)}:${s.slice(11,13)}:${s.slice(13,15)} UTC`;
+  return s;
+}
+
 function featureStyle(feature: FeatureLike): Style {
   const type = feature.getGeometry()?.getType();
   if (type === 'LineString') {
@@ -55,6 +68,12 @@ function ShipMap() {
   const sourceRef = useRef(new VectorSource());
   const drawRef   = useRef<Draw | null>(null);
 
+  interface Popup {
+    x: number; y: number;
+    time: number | string; lat: number; lon: number;
+    sog: number | null; cog: number | null; source: string;
+  }
+
   const [vessels, setVessels]       = useState<Vessel[]>([]);
   const [search, setSearch]         = useState('');
   const [selected, setSelected]     = useState<Vessel | null>(null);
@@ -63,6 +82,7 @@ function ShipMap() {
   const [loading, setLoading]       = useState(false);
   const [pointCount, setPointCount] = useState<number | null>(null);
   const [drawMode, setDrawMode]     = useState(false);
+  const [popup, setPopup]           = useState<Popup | null>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -80,6 +100,23 @@ function ShipMap() {
         zoom: 6,
       }),
     });
+    map.on('click', e => {
+      map.forEachFeatureAtPixel(e.pixel, feature => {
+        if (feature.getGeometry()?.getType() !== 'Point') return;
+        setPopup({
+          x: e.pixel[0] + 288,
+          y: e.pixel[1],
+          time:   feature.get('time'),
+          lat:    feature.get('lat'),
+          lon:    feature.get('lon'),
+          sog:    feature.get('sog'),
+          cog:    feature.get('cog'),
+          source: feature.get('source'),
+        });
+        return true;
+      }) ?? setPopup(null);
+    });
+
     mapObj.current = map;
     return () => map.setTarget(undefined);
   }, []);
@@ -154,7 +191,10 @@ function ShipMap() {
           const f = new Feature({
             geometry: new Point(fromLonLat([p.longitude, p.latitude])),
             sog: p.sog,
+            cog: p.cog,
             time: p.time,
+            lat: p.latitude,
+            lon: p.longitude,
             source: p.source,
           });
           sourceRef.current.addFeature(f);
@@ -283,6 +323,22 @@ function ShipMap() {
       {drawMode && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[#127475] text-white text-sm px-4 py-2 rounded shadow z-20">
           Draw a box on the map to filter vessels
+        </div>
+      )}
+
+      {popup && (
+        <div
+          className="absolute z-30 bg-white border border-gray-200 rounded shadow-lg px-3 py-2 text-xs pointer-events-none"
+          style={{ left: popup.x + 8, top: popup.y - 8 }}
+        >
+          <div className="font-semibold text-[#127475] mb-1">{popup.source}</div>
+          <div className="text-gray-600 space-y-0.5">
+            <div><span className="text-gray-400">Time </span>{formatTime(popup.time)}</div>
+            <div><span className="text-gray-400">Lat  </span>{popup.lat?.toFixed(4)}</div>
+            <div><span className="text-gray-400">Lon  </span>{popup.lon?.toFixed(4)}</div>
+            <div><span className="text-gray-400">SOG  </span>{popup.sog != null ? `${popup.sog} kt` : '—'}</div>
+            <div><span className="text-gray-400">COG  </span>{popup.cog != null ? `${popup.cog}°` : '—'}</div>
+          </div>
         </div>
       )}
     </div>
