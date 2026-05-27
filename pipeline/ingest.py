@@ -29,7 +29,7 @@ CCG_DIR = "/home/shared/aisdecode/testData"
 SAT_DIR = "/home/shared/aisdecode/testData/newSatAis/01"
 
 SQLITE_PATH = Path(__file__).parent.parent / "data" / "ais.db"
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
 
 USE_POSTGRES = DATABASE_URL is not None
 
@@ -182,7 +182,8 @@ def ingest_satellite():
             if len(df) > 0:
                 rows = list(df.itertuples(index=False, name=None))
                 with get_sat_conn() as conn:
-                    conn.executemany(f"""
+                    cur = conn.cursor()
+                    cur.executemany(f"""
                         INSERT INTO ais_satellite
                             (mmsi, time, longitude, latitude, sog, cog, vessel_name, ship_type)
                         VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})

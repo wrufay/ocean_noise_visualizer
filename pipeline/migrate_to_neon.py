@@ -24,10 +24,10 @@ HEADERS = {"Neon-Connection-String": NEON_CONN, "Content-Type": "application/jso
 BATCH_SIZE = 1000
 
 
-def nq(sql: str, params: list = None):
-    body = {"query": sql}
+def nq(sql: str, params: list | None = None):
+    body: dict = {"query": sql}
     if params:
-        body["params"] = [None if p is None else p for p in params]
+        body["params"] = [p for p in params]
     r = httpx.post(NEON_URL, json=body, headers=HEADERS, timeout=60)
     r.raise_for_status()
     return r.json()
