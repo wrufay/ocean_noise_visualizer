@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
 import OSM from 'ol/source/OSM';
 import { fromLonLat, transformExtent } from 'ol/proj';
-import Feature from 'ol/Feature';
+import Feature, { type FeatureLike } from 'ol/Feature';
 import LineString from 'ol/geom/LineString';
 import Point from 'ol/geom/Point';
 import VectorLayer from 'ol/layer/Vector';
@@ -31,7 +31,7 @@ interface RoutePoint {
   source: string;
 }
 
-function featureStyle(feature: Feature): Style {
+function featureStyle(feature: FeatureLike): Style {
   const type = feature.getGeometry()?.getType();
   if (type === 'LineString') {
     return new Style({
@@ -161,7 +161,7 @@ function ShipMap() {
         });
 
         const extent = sourceRef.current.getExtent();
-        mapObj.current!.getView().fit(extent, { padding: [60, 60, 60, 60], maxZoom: 12 });
+        if (extent) mapObj.current!.getView().fit(extent, { padding: [60, 60, 60, 60], maxZoom: 12 });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
