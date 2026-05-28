@@ -57,7 +57,6 @@ function featureStyle(feature: FeatureLike): Style {
     image: new CircleStyle({
       radius: 4,
       fill: new Fill({ color }),
-      stroke: new Stroke({ color: '#fff', width: 1 }),
     }),
   });
 }
@@ -99,9 +98,6 @@ function ShipMap() {
       view: new View({
         center: fromLonLat([-63.5, 44.5]),
         zoom: 6,
-        minZoom: 5,
-        maxZoom: 14,
-        extent: transformExtent([-70, 41, -54, 48], 'EPSG:4326', 'EPSG:3857'),
       }),
     });
     map.on('click', e => {
