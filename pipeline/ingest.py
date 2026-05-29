@@ -21,14 +21,17 @@ import duckdb
 import aisdb
 from aisdb.database.sqlfcn_callbacks import in_time_bbox_validmmsi
 
-# Scotian Shelf bounding box
+# Scotian Shelf bounding box - used for filtering data to only vessels on the Scotian Shelf
 XMIN, XMAX = -66.0, -57.0
 YMIN, YMAX = 42.0, 47.0
 
+# Hard coded directories - change these to point to your local data
 CCG_DIR = "/home/shared/aisdecode/testData"
 SAT_DIR = "/home/shared/aisdecode/testData/newSatAis/01"
 
 SQLITE_PATH = Path(__file__).parent.parent / "data" / "ais.db"
+
+# Set DATABASE_URL to use Postgres; if unset, falls back to SQLite
 DATABASE_URL: str = os.environ.get("DATABASE_URL", "")
 
 USE_POSTGRES = DATABASE_URL is not None
@@ -54,7 +57,7 @@ def get_sat_conn():
 def placeholder():
     return "%s" if USE_POSTGRES else "?"
 
-
+# Use AISdb to decode CCG NMEA files, then filter to Scotian Shelf bounding box.
 def ingest_ccg():
     """
     Decode raw CCG NMEA files into the database via aisdb.
@@ -71,12 +74,16 @@ def ingest_ccg():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         nm4_files = []
+
+        # Use symlink to change file extensions from .csv to .nm4 so AISdb decodes them as raw NMEA instead of pre-decoded tabular.
         for csv_path in csv_files:
             stem = Path(csv_path).stem
             nm4_path = os.path.join(tmpdir, f"{stem}.nm4")
             os.symlink(os.path.abspath(csv_path), nm4_path)
             nm4_files.append(nm4_path)
 
+        # AISdb documentation and source code for the decode_msgs function: https://aisviz.cs.dal.ca/AISdb/api/aisdb.database.decoder.html
+        # Tutorial describing the steps to process .csv or .nm4 files and write to a SQLite database: https://aisviz.gitbook.io/documentation/tutorials/using-your-ais-data
         with get_aisdb_conn() as dbconn:
             aisdb.decode_msgs(
                 filepaths=nm4_files,
@@ -125,6 +132,7 @@ def ingest_satellite():
     DuckDB 1.5 doesn't support zip natively, so we extract each zip to a
     temp file, filter with DuckDB, append to the DB, then clean up.
     """
+    # Each day of satellite data is one zip file containing a single CSV
     zip_files = sorted(glob.glob(f"{SAT_DIR}/*.csv.zip"))
     if not zip_files:
         print("No satellite zip files found.")
@@ -133,6 +141,7 @@ def ingest_satellite():
     print(f"Filtering {len(zip_files)} satellite file(s) via {'Postgres' if USE_POSTGRES else 'SQLite'}...")
 
     p = placeholder()
+    # Create the table once before the loop; IF NOT EXISTS is safe to re-run
     with get_sat_conn() as conn:
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS ais_satellite (
@@ -146,19 +155,27 @@ def ingest_satellite():
                 ship_type   TEXT
             )
         """)
+        # Index on (mmsi, time) speeds up route lookups per vessel
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sat_mmsi_time ON ais_satellite (mmsi, time)"
         )
         conn.commit()
 
     total = 0
+    # Use a temp dir so extracted CSVs are cleaned up automatically on exit
     with tempfile.TemporaryDirectory() as tmpdir:
         for zip_path in zip_files:
+            # Extract the single CSV inside the zip to the temp dir
             with zipfile.ZipFile(zip_path) as z:
                 csv_name = z.namelist()[0]
                 extracted = os.path.join(tmpdir, csv_name)
                 z.extract(csv_name, tmpdir)
 
+            # DuckDB filters in-memory before returning rows — much faster than
+            # inserting everything and deleting out-of-bounds rows after the fact.
+            # TRY_CAST handles malformed values without crashing (sets them to NULL).
+
+            # DuckDB read_csv documentation: https://duckdb.org/docs/current/data/csv/overview
             con = duckdb.connect()
             df = con.execute(f"""
                 SELECT
@@ -177,12 +194,13 @@ def ingest_satellite():
                     AND TRY_CAST(MMSI AS BIGINT) IS NOT NULL
             """).df()
             con.close()
-            os.remove(extracted)
+            os.remove(extracted)  # free disk space immediately after filtering
 
             if len(df) > 0:
                 rows = list(df.itertuples(index=False, name=None))
                 with get_sat_conn() as conn:
                     cur = conn.cursor()
+                    # executemany batches all rows in one call per file
                     cur.executemany(f"""
                         INSERT INTO ais_satellite
                             (mmsi, time, longitude, latitude, sog, cog, vessel_name, ship_type)
@@ -196,6 +214,7 @@ def ingest_satellite():
     print(f"Satellite ingestion complete. {total:,} total records.")
 
 
+# Used for testing and printing sample rows after ingestion, not currently used by API endpoints.
 def query_scotian_shelf(start: datetime, end: datetime):
     """
     Query CCG data filtered to Scotian Shelf bounding box and time range.
