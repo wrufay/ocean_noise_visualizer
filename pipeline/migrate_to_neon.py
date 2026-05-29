@@ -15,12 +15,17 @@ from pathlib import Path
 import httpx
 
 SQLITE_PATH = Path(__file__).parent.parent / "data" / "ais.db"
+
+# Set locally before running: export NEON_CONNECTION_STRING="postgresql://..."
 NEON_CONN = os.environ.get("NEON_CONNECTION_STRING")
 if not NEON_CONN:
     raise SystemExit("Error: NEON_CONNECTION_STRING not set.")
 
 NEON_URL = f"https://{re.search(r'@([^/?]+)', NEON_CONN).group(1)}/sql"
 HEADERS = {"Neon-Connection-String": NEON_CONN, "Content-Type": "application/json"}
+
+
+# Rows to insert into Neon Postgres per HTTP request. 1.4M CCG rows = 1,400 requests at this size.
 BATCH_SIZE = 1000
 
 
@@ -32,7 +37,7 @@ def nq(sql: str, params: list | None = None):
     r.raise_for_status()
     return r.json()
 
-
+# Setup schema in Neon Postgres
 def create_tables():
     print("Creating tables...")
     nq("""
@@ -94,6 +99,7 @@ def create_tables():
 
 
 def migrate_table(conn: sqlite3.Connection, table: str, columns: list[str]):
+    """Read all rows from a SQLite table and insert them into Neon Postgres in batches."""
     total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     print(f"\n{table}: {total:,} rows")
 
