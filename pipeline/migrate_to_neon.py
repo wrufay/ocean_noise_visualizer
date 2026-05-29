@@ -21,7 +21,8 @@ NEON_CONN = os.environ.get("NEON_CONNECTION_STRING")
 if not NEON_CONN:
     raise SystemExit("Error: NEON_CONNECTION_STRING not set.")
 
-NEON_URL = f"https://{re.search(r'@([^/?]+)', NEON_CONN).group(1)}/sql"
+_host_match = re.search(r'@([^/?]+)', NEON_CONN)
+NEON_URL = f"https://{_host_match.group(1)}/sql" if _host_match else ""
 HEADERS = {"Neon-Connection-String": NEON_CONN, "Content-Type": "application/json"}
 
 
