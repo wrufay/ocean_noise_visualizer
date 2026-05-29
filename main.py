@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -15,8 +16,29 @@ NEON_CONN: str = os.environ.get("NEON_CONNECTION_STRING", "")
 _neon_host_match = re.search(r'@([^/?]+)', NEON_CONN)
 NEON_URL = f"https://{_neon_host_match.group(1)}/sql" if _neon_host_match else ""
 
+<<<<<<< Updated upstream
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["https://vesselviz.vercel.app"], allow_methods=["*"], allow_headers=["*"])
+=======
+# Public demo: restrict to 20 vessels so we're not publishing the full dataset
+ALLOWED_MMSIS: set[int] = set()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global ALLOWED_MMSIS
+    sql = "SELECT mmsi FROM ais_202503_static WHERE mmsi IS NOT NULL ORDER BY mmsi LIMIT 20"
+    try:
+        rows = nq(sql) if NEON_CONN else sq(sql)
+        ALLOWED_MMSIS = {r["mmsi"] for r in rows}
+    except Exception:
+        pass
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+>>>>>>> Stashed changes
 
 
 def nq(sql: str, params: list | None = None) -> list[dict]:
@@ -72,7 +94,7 @@ def get_vessels():
     seen = set()
     vessels = []
     for row in list(ccg) + list(sat):
-        if row["mmsi"] not in seen:
+        if row["mmsi"] not in seen and row["mmsi"] in ALLOWED_MMSIS:
             seen.add(row["mmsi"])
             vessels.append({
                 "mmsi":        row["mmsi"],
@@ -127,7 +149,7 @@ def get_vessels_in_area(
     seen = set()
     vessels = []
     for row in list(ccg) + list(sat):
-        if row["mmsi"] not in seen:
+        if row["mmsi"] not in seen and row["mmsi"] in ALLOWED_MMSIS:
             seen.add(row["mmsi"])
             vessels.append({
                 "mmsi":        row["mmsi"],
@@ -144,6 +166,8 @@ def get_vessel_route(
     start: str | None = Query(None),
     end:   str | None = Query(None),
 ):
+    if ALLOWED_MMSIS and mmsi not in ALLOWED_MMSIS:
+        raise HTTPException(status_code=404, detail="Vessel not found")
     points = []
 
     # --- CCG (time stored as unix epoch integer) ---
