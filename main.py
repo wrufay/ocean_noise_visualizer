@@ -16,10 +16,6 @@ NEON_CONN: str = os.environ.get("NEON_CONNECTION_STRING", "")
 _neon_host_match = re.search(r'@([^/?]+)', NEON_CONN)
 NEON_URL = f"https://{_neon_host_match.group(1)}/sql" if _neon_host_match else ""
 
-<<<<<<< Updated upstream
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["https://vesselviz.vercel.app"], allow_methods=["*"], allow_headers=["*"])
-=======
 # Public demo: restrict to 20 vessels so we're not publishing the full dataset
 ALLOWED_MMSIS: set[int] = set()
 
@@ -37,8 +33,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
->>>>>>> Stashed changes
+app.add_middleware(CORSMiddleware, allow_origins=["https://vesselviz.vercel.app"], allow_methods=["*"], allow_headers=["*"])
 
 
 def nq(sql: str, params: list | None = None) -> list[dict]:
