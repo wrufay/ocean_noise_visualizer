@@ -86,11 +86,24 @@ def root():
 
 @app.get("/api/vessels")
 def get_vessels():
-    # MIN() aggregation works in both SQLite and Postgres.
-    rows = query("""
-        SELECT mmsi, MIN(vessel_name) AS vessel_name, MIN(ship_type) AS ship_type, 'CCG' AS source
-        FROM ais_202503_static WHERE mmsi IS NOT NULL GROUP BY mmsi
-    """)
+    if DATABASE_URL:
+        rows = pq("""
+            SELECT DISTINCT ON (mmsi) mmsi, vessel_name, ship_type, 'CCG' AS source
+            FROM ais_202503_static WHERE mmsi IS NOT NULL
+            ORDER BY mmsi, CASE WHEN vessel_name IS NOT NULL AND vessel_name != '' THEN 0 ELSE 1 END
+        """)
+    else:
+        rows = sq("""
+            SELECT mmsi, vessel_name, ship_type, 'CCG' AS source
+            FROM (
+                SELECT mmsi, vessel_name, ship_type,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY mmsi
+                           ORDER BY CASE WHEN vessel_name IS NOT NULL AND vessel_name != '' THEN 0 ELSE 1 END
+                       ) AS rn
+                FROM ais_202503_static WHERE mmsi IS NOT NULL
+            ) WHERE rn = 1
+        """)
     seen: set[int] = set()
     vessels = []
     for r in rows:
