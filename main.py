@@ -77,27 +77,10 @@ def get_vessels():
             FROM ais_202503_static WHERE mmsi IS NOT NULL GROUP BY mmsi
         """,
     )
-    sat = query(
-        pg_sql="""
-            SELECT DISTINCT ON (mmsi) mmsi, vessel_name, ship_type, 'satellite' AS source
-            FROM ais_satellite WHERE mmsi IS NOT NULL ORDER BY mmsi
-        """,
-        lite_sql="""
-            SELECT DISTINCT mmsi, vessel_name, ship_type, 'satellite' AS source
-            FROM ais_satellite WHERE mmsi IS NOT NULL
-        """,
-    )
-    seen = set()
-    vessels = []
-    for row in list(ccg) + list(sat):
-        if row["mmsi"] not in seen and row["mmsi"] in ALLOWED_MMSIS:
-            seen.add(row["mmsi"])
-            vessels.append({
-                "mmsi":        row["mmsi"],
-                "vessel_name": row["vessel_name"],
-                "ship_type":   row["ship_type"],
-                "source":      row["source"],
-            })
+    vessels = [
+        {"mmsi": r["mmsi"], "vessel_name": r["vessel_name"], "ship_type": r["ship_type"], "source": r["source"]}
+        for r in ccg if r["mmsi"] in ALLOWED_MMSIS
+    ]
     return {"vessels": vessels, "count": len(vessels)}
 
 
@@ -128,31 +111,10 @@ def get_vessels_in_area(
         pg_params=[min_lat, max_lat, min_lon, max_lon],
         lite_params=[min_lat, max_lat, min_lon, max_lon],
     )
-    sat = query(
-        pg_sql="""
-            SELECT DISTINCT mmsi, vessel_name, ship_type, 'satellite' AS source
-            FROM ais_satellite
-            WHERE latitude BETWEEN $1 AND $2 AND longitude BETWEEN $3 AND $4
-        """,
-        lite_sql="""
-            SELECT DISTINCT mmsi, vessel_name, ship_type, 'satellite' AS source
-            FROM ais_satellite
-            WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?
-        """,
-        pg_params=[min_lat, max_lat, min_lon, max_lon],
-        lite_params=[min_lat, max_lat, min_lon, max_lon],
-    )
-    seen = set()
-    vessels = []
-    for row in list(ccg) + list(sat):
-        if row["mmsi"] not in seen and row["mmsi"] in ALLOWED_MMSIS:
-            seen.add(row["mmsi"])
-            vessels.append({
-                "mmsi":        row["mmsi"],
-                "vessel_name": row["vessel_name"],
-                "ship_type":   row["ship_type"],
-                "source":      row["source"],
-            })
+    vessels = [
+        {"mmsi": r["mmsi"], "vessel_name": r["vessel_name"], "ship_type": r["ship_type"], "source": r["source"]}
+        for r in ccg if r["mmsi"] in ALLOWED_MMSIS
+    ]
     return {"vessels": vessels, "count": len(vessels)}
 
 
@@ -194,36 +156,5 @@ def get_vessel_route(
     except Exception:
         pass
 
-    # --- Satellite (time stored as compact ISO string e.g. 20251201T035835Z) ---
-    sat_start = start.replace("-", "").replace(":", "").replace(" ", "T") if start else None
-    sat_end   = end.replace("-", "").replace(":", "").replace(" ", "T") if end else None
-
-    pg_sat   = "SELECT time, longitude, latitude, sog, cog FROM ais_satellite WHERE mmsi = $1"
-    lite_sat = "SELECT time, longitude, latitude, sog, cog FROM ais_satellite WHERE mmsi = ?"
-    pg_sat_params: list = [mmsi]
-    lite_sat_params: list = [mmsi]
-
-    if sat_start:
-        n = len(pg_sat_params) + 1
-        pg_sat   += f" AND time >= ${n}"
-        lite_sat += " AND time >= ?"
-        pg_sat_params.append(sat_start); lite_sat_params.append(sat_start)
-    if sat_end:
-        n = len(pg_sat_params) + 1
-        pg_sat   += f" AND time <= ${n}"
-        lite_sat += " AND time <= ?"
-        pg_sat_params.append(sat_end); lite_sat_params.append(sat_end)
-
-    pg_sat += " ORDER BY time"
-    lite_sat += " ORDER BY time"
-
-    try:
-        for r in query(pg_sat, lite_sat, pg_sat_params, lite_sat_params):
-            points.append({"time": r["time"], "latitude": r["latitude"],
-                           "longitude": r["longitude"], "sog": r["sog"],
-                           "cog": r["cog"], "source": "satellite"})
-    except Exception:
-        pass
-
-    points.sort(key=lambda p: str(p["time"]))
+    points.sort(key=lambda p: p["time"])
     return {"mmsi": mmsi, "points": points, "count": len(points)}
