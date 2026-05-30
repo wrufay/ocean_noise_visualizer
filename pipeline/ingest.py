@@ -50,7 +50,7 @@ def ingest_ccg():
     aisdb detects file type by extension: .csv = decoded tabular, .nm4 = raw NMEA.
     CCG files are raw NMEA saved as .csv, so we symlink them as .nm4 before decoding.
     """
-    csv_files = glob.glob(f"{CCG_DIR}/CCG_AIS_UTC_Log_*.csv")
+    csv_files = sorted(glob.glob(f"{CCG_DIR}/CCG_AIS_UTC_Log_*.csv"))[:1]
     if not csv_files:
         print("No CCG files found.")
         return
@@ -113,7 +113,7 @@ def sample_to_demo(n: int):
     print(f"\nSampling to {n} CCG vessels for demo DB...")
     with sqlite3.connect(str(SQLITE_PATH)) as conn:
         mmsis = [r[0] for r in conn.execute(
-            "SELECT DISTINCT mmsi FROM ais_202503_dynamic WHERE mmsi IS NOT NULL ORDER BY mmsi LIMIT ?", (n,)
+            "SELECT DISTINCT mmsi FROM ais_202503_dynamic WHERE mmsi > 100000000 ORDER BY mmsi LIMIT ?", (n,)
         ).fetchall()]
 
         if mmsis:
